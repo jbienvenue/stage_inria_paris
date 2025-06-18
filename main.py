@@ -17,7 +17,7 @@ async def go_abandon(pos, Flast, correct, start):
         cur = (await c.query()).values[1]
     last = cur
     while True:
-        res = await c.set_position(position=pos, maximum_torque=0.05, accel_limit=3.0, query=True)
+        res = await c.set_position(position=pos, maximum_torque=0.025, accel_limit=9.8, query=True)
         print(res)
         count = max(count-1, 0)
         cur = res.values[1]
