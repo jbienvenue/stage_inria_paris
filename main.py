@@ -2,6 +2,7 @@ import asyncio, moteus, copy
 import matplotlib.pyplot as plt
 c = moteus.Controller(id=6)
 eps = 0.01
+STOP_ENGINE = True
 async def stop():
     await c.set_stop(query=True)
 
@@ -12,12 +13,13 @@ async def go_abandon(pos, Flast, correct, start):
     last = Flast
     positions_engine = []
     positions_stop = []
-    await c.set_stop()
-    cur = (await c.query()).values[1]
-    positions_stop.append(cur)
-    while not correct(cur, start):
+    if STOP_ENGINE:
+        await c.set_stop()
         cur = (await c.query()).values[1]
         positions_stop.append(cur)
+        while not correct(cur, start):
+            cur = (await c.query()).values[1]
+            positions_stop.append(cur)
     last = cur
     while True:
         res = await c.set_position(position=pos, maximum_torque=0.02, accel_limit=9.8, query=True)
