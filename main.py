@@ -1,7 +1,7 @@
 import asyncio, moteus, copy
 import matplotlib.pyplot as plt
 c = moteus.Controller(id=6)
-
+eps = 0.01
 async def stop():
     await c.set_stop(query=True)
 
@@ -11,17 +11,21 @@ async def go_abandon(pos, Flast, correct, start):
     count = 2
     last = Flast
     L = []
+    await c.set_stop()
+    cur = (await c.query()).values[1]
+    while not correct(cur, start):
+        cur = (await c.query()).values[1]
+    last = cur
     while True:
-        res = await c.set_position(position=pos, maximum_torque=0.1, accel_limit=2.0, query=True, query_override=query_override)
+        res = await c.set_position(position=pos, maximum_torque=0.05, accel_limit=3.0, query=True)
+        print(res)
         count = max(count-1, 0)
         cur = res.values[1]
-        is_complete = res.values[moteus.Register.TRAJECTORY_COMPLETE]
         L.append(cur)
-        if count == 0:
-            if is_complete:
-                return True, cur, res, L
-            if not correct(cur, last) and correct(cur, start+(start-Flast)):
-                return False, cur, res, L
+        if not correct(cur, last) and correct(cur, start+(start-Flast)):
+            return cur, res, L
+        if pos-eps < cur < pos+eps:
+            return cur, res, L
         last = cur
         await asyncio.sleep(0.02)
 
@@ -35,20 +39,20 @@ async def main():
     last = start
     M = []
     while True:
-        is_ok, last, final, L = await go_abandon(goalR, last, lambda a,b:a>b, start)
+        last, final, L = await go_abandon(goalR, last, lambda a,b:a>b, start)
         print(final, goalR)
         M.append(L)
-        if is_ok:break
-        is_ok, last, final, L = await go_abandon(goalL, last, lambda a,b:a<b, start)
+        if goalR-eps < last < goalR+eps:break
+        last, final, L = await go_abandon(goalL, last, lambda a,b:a<b, start)
         print(final, goalL)
         M.append(L)
-        if is_ok:break
+        if goalL-eps < last < goalL+eps:break
+    await stop()
     plt.ion()
     start = 0
     for n, data in enumerate(M):
         plt.plot(range(start, start+len(data)), data, c='red' if n%2 else 'green')
         start += len(data)
-    await stop()
     plt.show(block=True)
     print(M)
     
