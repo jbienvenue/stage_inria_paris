@@ -20,9 +20,9 @@ async def go_abandon(pos, Flast, correct, start):
         while not correct(cur, start):
             cur = (await c.query()).values[1]
             positions_stop.append(cur)
-    last = cur
+        last = cur
     while True:
-        res = await c.set_position(position=pos, maximum_torque=0.02, accel_limit=9.8, query=True)
+        res = await c.set_position(position=pos, maximum_torque=0.02, accel_limit=9.8 if not correct(cur, start) else 2.0, query=True)
         count = max(count-1, 0)
         cur = res.values[1]
         positions_engine.append(cur)
