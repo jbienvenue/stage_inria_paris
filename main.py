@@ -34,8 +34,6 @@ async def go_abandon(pos, Flast, correct, start):
 async def main():
     result = await c.set_stop(query=True)
     start = result.values[1]
-    print(await c.set_recapture_position_velocity(query=True))
-    print(start)
     goalR = start+0.5
     goalL = start-0.5
     last = start
