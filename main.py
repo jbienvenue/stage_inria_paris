@@ -20,11 +20,11 @@ async def go_abandon(pos, Flast, correct, start):
         positions_stop.append(cur)
     last = cur
     while True:
-        res = await c.set_position(position=pos, maximum_torque=0.025, accel_limit=9.8, query=True)
+        res = await c.set_position(position=pos, maximum_torque=0.02, accel_limit=9.8, query=True)
         count = max(count-1, 0)
         cur = res.values[1]
         positions_engine.append(cur)
-        if not correct(cur, last) and correct(cur, start+(start-Flast)):
+        if not correct(cur, last):# and correct(cur, start+(start-Flast)):
             return cur, res, positions_engine, positions_stop
         if pos-eps < cur < pos+eps:
             return cur, res, positions_engine, positions_stop
