@@ -1,19 +1,30 @@
 import asyncio, moteus, copy
 import matplotlib.pyplot as plt
 import time
+import math
 c = moteus.Controller(id=6)
 eps = 0.01
 STOP_ENGINE = True
 V = moteus.Register.VELOCITY
 P = moteus.Register.POSITION
 pause = 0.02
+max_torque = 0.02
 async def stop():
     await c.set_stop(query=True)
+
+async def handle(pos):
+    while True:
+        await c.set_position(position=pos, maximum_torque=max_torque, kp_scale=1.5)
+g = 1.1
+def speed_angle(pos):
+    return abs(g*(-math.cos(pos*2*math.pi)+math.cos(math.pi)))
+
+def corrected_speed(pos, start):
+    return speed_angle(pos-start)/0.7
 
 async def go_abandon(pos, Flast, correct, start):
     query_override = copy.deepcopy(c.query_resolution)
     query_override.trajectory_complete = moteus.multiplex.INT8
-    count = 2
     last = Flast
     positions_engine = []
     positions_stop = []
@@ -24,7 +35,7 @@ async def go_abandon(pos, Flast, correct, start):
     if STOP_ENGINE:
         await stop()
         Q = await c.query()
-        Pause = asyncio.sleep(pause)
+        Pause = asyncio.create_task(asyncio.sleep(pause))
         cur = Q.values[P]
         velocities_stop.append(Q.values[V])
         positions_stop.append(cur)
@@ -45,9 +56,8 @@ async def go_abandon(pos, Flast, correct, start):
     lastV = None
     while True:
         await Pause
-        res = await c.set_position(position=pos, maximum_torque=0.02, accel_limit=2.0, query=True)
-        Pause = asyncio.sleep(pause)
-        count = max(count-1, 0)
+        res = await c.set_position(position=pos, maximum_torque=max_torque, accel_limit=1.0, velocity_limit=corrected_speed(last, start), query=True)
+        Pause = asyncio.create_task(asyncio.sleep(pause))
         cur = res.values[P]
         positions_engine.append(cur)
         velocities_engine.append(res.values[V])
@@ -68,6 +78,7 @@ async def main():
     goalR = start+0.5
     goalL = start-0.5
     last = start
+    startPos = start
     position_groups = []
     velocities_groups = []
     accelerations_groups = []
@@ -84,24 +95,31 @@ async def main():
         if curGoal-eps < last < curGoal+eps:break
         curGoal, nextGoal = nextGoal, curGoal
         curFunc, nextFunc = nextFunc, curFunc
+    #await stop()
+    print(last, curGoal)
+    task = asyncio.create_task(asyncio.to_thread(input, "press enter to go down and finish"))
+    while not task.done():
+        await c.set_position(position=curGoal, maximum_torque=max_torque, kp_scale=1.5)
+        await asyncio.sleep(pause)
+    print('go down')
+    await c.set_position_wait_complete(position=startPos, velocity_limit=0.1, maximum_torque=0.3, accel_limit=2.0)
     await stop()
     plt.ion()
-    start = 0
-    for n, data in enumerate(position_groups):
-        plt.plot(range(start, start+len(data)), data, c=['green', 'red'][n%2])
-        start += len(data)
-    plt.show(block=True)
-    start = 0
-    for n, data in enumerate(velocities_groups):
-        plt.plot(range(start, start+len(data)), data, c=['green', 'red'][n%2])
-        start += len(data)
-    plt.show(block=True)
-    start = 0
-    for n, data in enumerate(accelerations_groups):
-        plt.plot(range(start, start+len(data)), data, c=['green', 'red', 'blue', 'orange'][n%4])
-        start += len(data)
-    #plt.plot(range(len(E)-1), [(E[n+1]-E[n])/pause for n in range(len(E)-1)])
-    plt.show(block=True)
+    first = False
+    for N, datas in enumerate([position_groups, velocities_groups, accelerations_groups]):
+        func = (lambda a:a) if N != 1 else abs
+        start = 0
+        for n, data in enumerate(datas):
+            plt.plot(range(start, start+len(data)), list(map(func, data)), c=['green', 'red'][n%2])
+            start += len(data)
+        if N == 0:
+            start = 0
+            for n, data in enumerate(datas):
+                plt.plot(range(start, start+len(data)), [corrected_speed(i, startPos) for i in data], c='black')
+                start += len(data)
+        else:
+            plt.show(block=True)
+        first = True
     
 
 try:
