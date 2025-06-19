@@ -1,5 +1,6 @@
 import asyncio, moteus, copy
 import matplotlib.pyplot as plt
+import time
 c = moteus.Controller(id=6)
 eps = 0.01
 STOP_ENGINE = True
@@ -16,31 +17,50 @@ async def go_abandon(pos, Flast, correct, start):
     last = Flast
     positions_engine = []
     positions_stop = []
-    velocities = []
+    velocities_engine = []
+    velocities_stop = []
+    accelerations_stop = []
+    accelerations_engine = []
     if STOP_ENGINE:
-        await c.set_stop()
+        await stop()
         Q = await c.query()
+        Pause = asyncio.sleep(pause)
         cur = Q.values[P]
-        velocities.append(Q.values[V])
+        velocities_stop.append(Q.values[V])
         positions_stop.append(cur)
+        startT = time.time()
         while not correct(cur, start):
+            await Pause
             Q = await c.query()
+            Pause = asyncio.sleep(pause)
             cur = Q.values[P]
             positions_stop.append(cur)
-            velocities.append(Q.values[V])
+            velocities_stop.append(Q.values[V])
+            endT = time.time()
+            T = endT-startT
+            accelerations_stop.append((velocities_stop[-1]-velocities_stop[-2])/T)
+            startT = endT
         last = cur
+    startT = None
+    lastV = None
     while True:
-        res = await c.set_position(position=pos, maximum_torque=0.02, accel_limit=(9.8 if not correct(cur, start) else 2.0), query=True)
+        await Pause
+        res = await c.set_position(position=pos, maximum_torque=0.02, accel_limit=2.0, query=True)
+        Pause = asyncio.sleep(pause)
         count = max(count-1, 0)
         cur = res.values[P]
         positions_engine.append(cur)
-        velocities.append(res.values[V])
-        if not correct(cur, last):# and correct(cur, start+(start-Flast)):
-            return cur, res, positions_engine, positions_stop, velocities
-        if pos-eps < cur < pos+eps:
-            return cur, res, positions_engine, positions_stop, velocities
+        velocities_engine.append(res.values[V])
+        endT = time.time()
+        if startT is not None:
+            T = endT-startT
+            accelerations_engine.append((velocities_engine[-1]-lastV)/T)
+        startT = endT
+        lastV = velocities_engine[-1]
+        if not correct(cur, last) or pos-eps < cur < pos+eps:
+            await Pause
+            return cur, positions_engine, positions_stop, velocities_engine, velocities_stop, accelerations_engine, accelerations_stop
         last = cur
-        await asyncio.sleep(pause)
 
 async def main():
     result = await c.set_stop(query=True)
@@ -50,19 +70,20 @@ async def main():
     last = start
     position_groups = []
     velocities_groups = []
+    accelerations_groups = []
+    curGoal, nextGoal = goalR, goalL
+    curFunc, nextFunc = (lambda a,b:a>b), (lambda a,b:a<b)
     while True:
-        last, final, positions_engine, positions_stop, velocities = await go_abandon(goalR, last, lambda a,b:a>b, start)
-        #print(final, goalR)
+        last, positions_engine, positions_stop, velocities_engine, velocities_stop, accelerations_engine, accelerations_stop = await go_abandon(curGoal, last, curFunc, start)
         position_groups.append(positions_stop)
         position_groups.append(positions_engine)
-        velocities_groups.append(velocities)
-        if goalR-eps < last < goalR+eps:break
-        last, final, positions_engine, positions_stop, velocities = await go_abandon(goalL, last, lambda a,b:a<b, start)
-        #print(final, goalL)
-        position_groups.append(positions_stop)
-        position_groups.append(positions_engine)
-        velocities_groups.append(velocities)
-        if goalL-eps < last < goalL+eps:break
+        velocities_groups.append(velocities_stop)
+        velocities_groups.append(velocities_engine)
+        accelerations_groups.append(accelerations_stop)
+        accelerations_groups.append(accelerations_engine)
+        if curGoal-eps < last < curGoal+eps:break
+        curGoal, nextGoal = nextGoal, curGoal
+        curFunc, nextFunc = nextFunc, curFunc
     await stop()
     plt.ion()
     start = 0
@@ -76,13 +97,11 @@ async def main():
         start += len(data)
     plt.show(block=True)
     start = 0
-    E = sum(velocities_groups, start=[])
-    Y = []
-    for n in range(len(E)-1):
-        Y.append((E[n+1]-E[n])/pause)
-    plt.plot(range(len(E)-1), Y)
+    for n, data in enumerate(accelerations_groups):
+        plt.plot(range(start, start+len(data)), data, c=['green', 'red', 'blue', 'orange'][n%4])
+        start += len(data)
+    #plt.plot(range(len(E)-1), [(E[n+1]-E[n])/pause for n in range(len(E)-1)])
     plt.show(block=True)
-    #print(position_groups)
     
 
 try:
