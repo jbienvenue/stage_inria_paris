@@ -97,9 +97,15 @@ async def try_go_handle(pos, correct, cur, startPos, data):
         cur = res.values[P]
         vel = res.values[V]
         data.add(res)
-        if not correct(cur, last):return False, cur
-        if pos-eps < cur < pos+eps:return True, cur
+        if not correct(cur, last):
+            rep = False, cur
+            break
+        if pos-eps < cur < pos+eps:
+            rep = True, cur
+            break
         await asyncio.sleep(pause)
+    print('finished at', cur)
+    return rep
 
 async def go_abandon(pos, Flast, correct, startPos):
     query_override = copy.deepcopy(c.query_resolution)
