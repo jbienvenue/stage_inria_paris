@@ -10,7 +10,7 @@ V = moteus.Register.VELOCITY
 P = moteus.Register.POSITION
 Torq = moteus.Register.TORQUE
 pause = 0.02
-max_torque = 0.05
+max_torque = 0.02
 
 @dataclass(init=True, repr=True)
 class Plot:
@@ -169,14 +169,16 @@ async def main():
     await c.set_position_wait_complete(position=startPos, velocity_limit=0.1, maximum_torque=0.3, accel_limit=2.0)
     await stop()
     plt.ion()
+    plt.figure()
+    plt.subplot(221)
     plot_all(datas, 0)
     plot_all(datas, 0, color1='black', color2='black', mapping=lambda x:corrected_speed(x, startPos))
     plot_all(datas, 2, mapping=abs)
-    plt.show(block=True)
+    plt.subplot(222)
     plot_all(datas, 1)
-    plt.show(block=True)
+    plt.subplot(223)
     plot_all(datas, 3)
-    plt.show(block=True)
+    plt.subplot(224)
     plot2d_all(datas, 0, 2)
     plt.show(block=True)
 
