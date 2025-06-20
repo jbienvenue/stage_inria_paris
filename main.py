@@ -19,6 +19,9 @@ g = 1.1
 def speed_angle(pos):
     return abs(g*(-math.cos(pos*2*math.pi)+math.cos(math.pi)))
 
+def acceleration(pos):
+    return -2*math.pi*math.sin(2*math.pi*pos)*g
+
 def corrected_speed(pos, start):
     return speed_angle(pos-start)/0.7
 
